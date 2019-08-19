@@ -34,10 +34,6 @@ Pod::Spec.new do |s|
         ss.dependency 'ZDCChat/API'
     end
 
-    s.subspec 'Localization' do |ss|
-        ss.resources = ["ZDCChatStrings.bundle"]
-    end
-
     s.subspec 'API' do |ss|
         ss.frameworks = 'SystemConfiguration'
         ss.ios.vendored_frameworks = 'ZDCChatAPI.framework'
