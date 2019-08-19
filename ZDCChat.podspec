@@ -23,7 +23,7 @@ Pod::Spec.new do |s|
     s.platform     = :ios, '9.0'
     s.requires_arc = true
 
-    s.default_subspecs = 'UI', 'API', 'Localization'
+    s.default_subspecs = 'UI', 'API'
 
     s.subspec 'UI' do |ss|
         ss.ios.vendored_frameworks = 'ZDCChat.framework'
