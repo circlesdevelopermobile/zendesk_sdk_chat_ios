@@ -31,6 +31,10 @@ static const float ZDC_CONTENT_HEIGHT = 410.0f;
 #define ZDC_BTN_TITLE_HIGHLIGHT [UIColor colorWithWhite:0.2627f alpha:0.3f]
 #define ZDC_BTN_BORDER [UIColor colorWithWhite:0.8470f alpha:1.0f]
 
+// If set to YES, all chats will be started in a modal, set to NO and they'll all be pushed on to the UINavigationController.
+static const BOOL useModal = NO;
+static UIModalPresentationStyle chatModalPresentationStyle = UIModalPresentationFullScreen;
+static ZDCEmailTranscriptAction emailTranscriptAction = ZDCEmailTranscriptActionPrompt;
 
 @interface ViewController ()
 
@@ -153,21 +157,18 @@ static const float ZDC_CONTENT_HEIGHT = 410.0f;
     [_scrollView addSubview:label];
 }
 
-- (void) viewDidLayoutSubviews
-{
+- (void) viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     _scrollView.contentSize = CGSizeMake(self.contentView.frame.size.width, ZDC_CONTENT_HEIGHT);
     _scrollView.contentInset = UIEdgeInsetsMake([self topViewOffset], 0.0f, [self bottomViewOffset], 0.0f);
 }
 
-- (BOOL) agentAvailabilityObservingEnabled
-{
+- (BOOL) agentAvailabilityObservingEnabled {
     return [[self enableAgentAvailabilityObservingSwitch] isOn];
 }
 
 // This is required to fix MSDK-4046
-- (void)connectionEvent
-{
+- (void)connectionEvent {
     if ([[ZDCChatAPI instance] connectionStatus] == ZDCConnectionStatusConnected) {
         if (self.department != nil) {
             [[ZDCChatAPI instance] updateDepartment:self.department];
@@ -185,20 +186,29 @@ static const float ZDC_CONTENT_HEIGHT = 410.0f;
     [[ZDCChatAPI instance] addObserver:self forConnectionEvents:@selector(connectionEvent)];
 }
 
+- (void)startChat:(ZDCConfigBlock)config {
+    [[ZDCChat instance] setChatModalPresentationStyle: chatModalPresentationStyle];
+    
+    if (useModal) {
+        [ZDCChat startChat:config];
+    } else {
+        [ZDCChat startChatIn:self.navigationController withConfig:config];
+    }
+}
+
 - (void) allPreChatFieldsOptional
 {
     [[ZDCChat instance] enableAgentAvailabilityObserving: [self agentAvailabilityObservingEnabled]];
     
-    // track the event
     [[ZDCChat instance].api trackEvent:@"Chat button pressed: (all fields optional)"];
-    
-    // start a chat in a new modal
-    [ZDCChat startChatIn:self.navigationController withConfig:^(ZDCConfig *config) {
+
+    [self startChat:^(ZDCConfig *config) {
         config.preChatDataRequirements.name = ZDCPreChatDataOptionalEditable;
         config.preChatDataRequirements.email = ZDCPreChatDataOptionalEditable;
         config.preChatDataRequirements.phone = ZDCPreChatDataOptionalEditable;
         config.preChatDataRequirements.department = ZDCPreChatDataOptionalEditable;
         config.preChatDataRequirements.message = ZDCPreChatDataOptionalEditable;
+        config.emailTranscriptAction = emailTranscriptAction;
         // This is required to fix MSDK-4046
         [self observeConnectionEvents];
     }];
@@ -208,17 +218,15 @@ static const float ZDC_CONTENT_HEIGHT = 410.0f;
 {
     [[ZDCChat instance] enableAgentAvailabilityObserving: [self agentAvailabilityObservingEnabled]];
     
-    // track the event
     [[ZDCChat instance].api trackEvent:@"Chat button pressed: (all fields required)"];
-    
-    // Start a chat pushed on to the current navigation controller
-    // with session config making all pre-chat fields required
-    [ZDCChat startChatIn:self.navigationController withConfig:^(ZDCConfig *config) {
+
+    [self startChat:^(ZDCConfig *config) {
         config.preChatDataRequirements.name = ZDCPreChatDataRequiredEditable;
         config.preChatDataRequirements.email = ZDCPreChatDataRequiredEditable;
         config.preChatDataRequirements.phone = ZDCPreChatDataRequiredEditable;
         config.preChatDataRequirements.department = ZDCPreChatDataRequiredEditable;
         config.preChatDataRequirements.message = ZDCPreChatDataRequired;
+        config.emailTranscriptAction = emailTranscriptAction;
         // This is required to fix MSDK-4046
         [self observeConnectionEvents];
     }];
@@ -228,19 +236,11 @@ static const float ZDC_CONTENT_HEIGHT = 410.0f;
 {
     [[ZDCChat instance] enableAgentAvailabilityObserving: [self agentAvailabilityObservingEnabled]];
     
-    // track the event
     [[ZDCChat instance].api trackEvent:@"Chat button pressed: (no pre-chat form) - doesnt show connection bar"];
   
-    // start a chat pushed on to the current navigation controller
-    // with session config setting all pre-chat fields as not required
-    [ZDCChat startChatIn:self.navigationController withConfig:^(ZDCConfig *config) {
-        config.preChatDataRequirements.name = ZDCPreChatDataNotRequired;
-        config.preChatDataRequirements.email = ZDCPreChatDataNotRequired;
-        config.preChatDataRequirements.phone = ZDCPreChatDataNotRequired;
-        config.preChatDataRequirements.department = ZDCPreChatDataNotRequired;
-        config.preChatDataRequirements.message = ZDCPreChatDataNotRequired;
-        config.emailTranscriptAction = ZDCEmailTranscriptActionNeverSend;
+    [self startChat:^(ZDCConfig *config) {
         config.showsConnectionBar = NO;
+        config.emailTranscriptAction = emailTranscriptAction;
         // This is required to fix MSDK-4046
         [self observeConnectionEvents];
     }];
@@ -250,23 +250,17 @@ static const float ZDC_CONTENT_HEIGHT = 410.0f;
 {
     [[ZDCChat instance] enableAgentAvailabilityObserving: [self agentAvailabilityObservingEnabled]];
     
-    // track the event
     [[ZDCChat instance].api trackEvent:@"Chat button pressed: (pre-set data) - shows connection bar for 1 second"];
 
-    // before starting the chat set the visitor data
+    // Before starting the chat set the visitor data
     [ZDCChat updateVisitor:^(ZDCVisitorInfo *visitor) {
-        
         visitor.phone = [NSString stringWithFormat:@"%lu", (long)[[NSDate date] timeIntervalSince1970]];
         visitor.name = [NSString stringWithFormat:@"Preconfig %lu", (long)[[NSDate date] timeIntervalSince1970]];
         visitor.email = [NSString stringWithFormat:@"chattest+%lu@test.com", (long)[[NSDate date] timeIntervalSince1970]];
         [visitor addNote:@"This is another note"];
-        // This is required to fix MSDK-4046
-        [self observeConnectionEvents];
     }];
     
-    // start a chat pushed on to the current navigation controller
-    // with a session config requiring all pre-chat fields and setting tags and department
-    [ZDCChat startChatIn:self.navigationController withConfig:^(ZDCConfig *config) {
+    [self startChat:^(ZDCConfig *config) {
         config.preChatDataRequirements.name = ZDCPreChatDataRequired;
         config.preChatDataRequirements.email = ZDCPreChatDataRequired;
         config.preChatDataRequirements.phone = ZDCPreChatDataRequired;
@@ -274,21 +268,17 @@ static const float ZDC_CONTENT_HEIGHT = 410.0f;
         config.preChatDataRequirements.message = ZDCPreChatDataRequired;
         config.showsConnectionBar = YES;
         config.connectionBarAutoCloseDuration = 1.0f;
+        config.emailTranscriptAction = emailTranscriptAction;
         // This is required to fix MSDK-4046
         [self observeConnectionEvents];
-
-      //TODO
-//        sessionConfig.department = @"The date";
-//        sessionConfig.tags = @[@"tag1", @"tag2"];
     }];
 }
 
 - (void) presetDataTwo
 {
-    // track the event
     [[ZDCChat instance].api trackEvent:@"Chat button pressed: (pre-set data) - shows connection bar - user touch required"];
 
-    // before starting the chat set the visitor data
+    // Before starting the chat set the visitor data
     [ZDCChat updateVisitor:^(ZDCVisitorInfo *visitor) {
         visitor.phone = [NSString stringWithFormat:@"%lu", (long)[[NSDate date] timeIntervalSince1970]];
         visitor.name = [NSString stringWithFormat:@"Preconfig %lu", (long)[[NSDate date] timeIntervalSince1970]];
@@ -296,9 +286,7 @@ static const float ZDC_CONTENT_HEIGHT = 410.0f;
         [visitor addNote:@"This is another note"];
     }];
 
-    // start a chat pushed on to the current navigation controller
-    // with a session config requiring all pre-chat fields and setting tags and department
-    [ZDCChat startChatIn:self.navigationController withConfig:^(ZDCConfig *config) {
+    [self startChat:^(ZDCConfig *config) {
         config.preChatDataRequirements.name = ZDCPreChatDataRequired;
         config.preChatDataRequirements.email = ZDCPreChatDataRequired;
         config.preChatDataRequirements.phone = ZDCPreChatDataRequired;
@@ -306,12 +294,9 @@ static const float ZDC_CONTENT_HEIGHT = 410.0f;
         config.preChatDataRequirements.message = ZDCPreChatDataRequired;
         config.showsConnectionBar = YES;
         config.connectionBarAutoCloseDuration = 0.0f;
+        config.emailTranscriptAction = emailTranscriptAction;
         // This is required to fix MSDK-4046
         [self observeConnectionEvents];
-
-        //TODO
-        //        sessionConfig.department = @"The date";
-        //        sessionConfig.tags = @[@"tag1", @"tag2"];
     }];
 }
 
